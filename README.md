@@ -14,6 +14,9 @@ Není ale cílem aby ho hráči nosil během hry nosil s sebou.
 - Servisně snadné připojená dvířka a jiné moduly vně základního zařízení
 - Základní zvuková odezva (pískle, na pokročilejší zvuk bude modul)
 
+
+
+
 # Základní struktura elektroniky
 
 Elektronika je rozdělena na dvě desky, Led dsku a Hlavní desku.
@@ -27,31 +30,35 @@ Oproti předchozím verzím je přidán LED-kruh i na druhou stranu LedDesky aby
 
 ## Hlavní deska 
 - ESP32-S3
-- jednočlánek
 - Interní systémy
     - dohodnutí PD
     - bzučák (bez oscilátorové)
     - Power manager
+        - jednočlánek
         - zapínání
         - step-up na 5V
         - LDO na 3V3
         - nabíječka
+        - hw ochrana podvybití
 - Konektory na
     - ledDesku
     - komunikační modul
     - externí moduly
     - USB-C (nabíjení a primární programování [USB přímo z ESP, nebudeme zabírat místo převodníkem])
     - zbylé piny
-- mini UI
-    - RESET tlačítka
-    - BOOT tlačítka
-    - zapínací tlačítko
-    - vypínací tlačítko bych spojil se zapínacím nebo možná s resetem (dlouhí stisk vypíná, nechci tam mít příliž mnoho tlačítek)
-    - dvě tlačítka 
-    - dvě obyčejné ledky?
-    - *podle místa kontakty na SemiSemafoří programátor*
+    - mini UI
 
-# podrobnější popis jednotlivých bodů
+## Mini UI
+Minimalistické vývojové rozhraní.
+- RESET tlačítka
+- BOOT tlačítka
+- zapínací tlačítko
+- vypínací tlačítko bych spojil se zapínacím nebo možná s resetem (dlouhí stisk vypíná, nechci tam mít příliž mnoho tlačítek)
+- dvě tlačítka 
+- dvě obyčejné ledky?
+- *podle místa kontakty na SemiSemafoří programátor*
+
+# Popis jednotlivých bodů
 ## Interní systémy
 ### Dohodnutí PD
 Vykomunykování vyššího napětí a proudu zajišťuje čip **AP33772** připojený na I2C ESP.
@@ -75,18 +82,32 @@ Z napětí 3.3V je napájeno ESP32S3, LCD1x14 a PD sink *(konkrétní chip ješt
 
 #### Nabíječka
 Nabíjení probíhá z USB-C, nabíječka je proto schopna nabíjet z 5V.
-Aby se ale zařízení dalo nabít rychleji je možno použít standard PowerDelivery s napětí až 24V (*AP33772*).
+Aby se ale zařízení dalo nabít rychleji je možno použít standard PowerDelivery s napětí až 24V.
+Na nabíjení je proto použit chip **BQ24179YBGR**.
+
+### Hw ochrana podvybití
+Kvuli ochraně baterie se zařízení vypne pokud se baterie vybije pod 3.1V (podle https://web.archive.org/web/20101122230718/https://www.panasonic.com/industrial/includes/pdf/Panasonic_LiIon_Charging.pdf by napětí na článek nemělo klesnout pod 3.0V a AHS přidává rezervu 0.1V [ https://web.archive.org/web/20100413182032/http://www.panasonic.com/industrial/batteries-oem/oem/lithium-ion.aspx ]) 
 
 
 
 ## Konektory
 ### USB-C
-D+ D- jsou napojeny přímo na ESP.
-CC piny napojeny na AP33772 a ten na I2C z ESP.
+D+ D- jsou napojeny přímo na ESP a CC piny jsou napojeny na AP33772 a to přes I2C na ESP.
 
 ### Konektor komunikačního modulu
-Pin-out M2 konektoru z https://www.waveshare.com/wiki/SIM7600G-H-M2_4G_HAT
-![](M.2-Compatibility.jpg)
+Na konektor, je z ESP vyvedeno: 
+-   I2C
+-   celý UART
+-   FUL_CARD_POWER_OFF
+-   RESET
+-   WoWWAN (interrupt)
+
+a mimo ESP je na konektoru:
+-   napájení přímo z baterie
+-   SIM
+
+Pin-out M2 konektoru z https://files.waveshare.com/upload/0/02/SIM7600X-M2_Hardware_Design_V1.01.pdf
+![](SIM7600G-H-M.2-PIN.png)
 
 ### Konektor na LedDesku
 
@@ -131,23 +152,25 @@ LDC-GND je na hlavní desce normální GND ale kvůli velkým proudum do ledek j
 
 ---> INI
 
-Všechny moduly jsou připojeny na jeden RX pin AHS, proto mají povinnost odpovídat jen když jsou tázány a jinak držet své TX v high-impedance. 
-To mimo jiné znamená že je zajištěno aby dva moduli mluvili ve stejnou chvíli!
-*To může být zajištěno např. stop bajtem (stop bit může být nedostatečný).
- Ten muže zároveň sloužit jako informace pro AHS že od tohoto bajtu může na lince očekávat maximálně šum.*
-Každý modul má přesto TX připojen přes rezistor 180Ω.
+Všechny moduly jsou připojeny na jeden RX pin AHS.
+Proto musí firmware AHS zajistit aby dva moduli nevysílali současně!
+Každý modul má TX připojen přes rezistor 180Ω jako ochranu.
 
 Interrupt na modulech se chová jako open-collector což je zajistit hardwarově.
 
-AHS zajišťuje odolnost proti rušení na všech vstupních vodičích pomocí 10kΩ pull-up a odolnost proti zkratu na výstupních vodičích.
+AHS zajišťuje odolnost proti rušení na všech vstupních vodičích pomocí 4.7kΩ pull-up a odolnost proti zkratu na datových výstupních vodičích pomocí 180Ω.
 Zároveň zajistí ESD ochranu všem vodičům co vedou z/do AHS.
 
 Konektor je zároveň sto dodat napájení 5V s proudem v součty 2A.
 
+Komunikace muže být vedena kabelem o délce až 25cm při komunikační rychlosti 5Mbps.
+*Při dalším prodlužování linky bude třeba vodiče RX a TX vlnově přizpůsobit a doplnit linku terminátory*
 
 
 
 ## mechanická část
+Základ AHS je mechanicky krátký válec s tlakovou plochou na horní ploše.
+Kolem tlakové plochu je umístěn axiální světelný kruh a v horní části válcové plochy je radiální světelný kruh.
 
 - Tělo minimálně v prototypu tisknuté
 - Vyzkoušet různé provedení kontaktní plochy
